@@ -35,7 +35,7 @@ func (s *math) GetRectCenterColProperties(imageWidth float64, imageHeight float6
 	xColOffset float64, percent float64,
 ) (x float64, y float64, w float64, h float64) {
 	percent /= 100.0
-	left, top, _, _ := s.pdf.GetMargins()
+	_, top, _, _ := s.pdf.GetMargins()
 
 	imageProportion := imageHeight / imageWidth
 	celProportion := colHeight / colWidth
@@ -47,7 +47,8 @@ func (s *math) GetRectCenterColProperties(imageWidth float64, imageHeight float6
 		widthCorrection := s.GetCenterCorrection(colWidth, newImageWidth)
 		heightCorrection := s.GetCenterCorrection(colHeight, newImageHeight)
 
-		x = xColOffset + left + widthCorrection
+		x = xColOffset + widthCorrection
+
 		y = top + heightCorrection
 		w = newImageWidth
 		h = newImageHeight
@@ -58,7 +59,7 @@ func (s *math) GetRectCenterColProperties(imageWidth float64, imageHeight float6
 		widthCorrection := s.GetCenterCorrection(colWidth, newImageWidth)
 		heightCorrection := s.GetCenterCorrection(colHeight, newImageHeight)
 
-		x = xColOffset + left + widthCorrection
+		x = xColOffset + widthCorrection
 		y = top + heightCorrection
 		w = newImageWidth
 		h = newImageHeight
@@ -72,7 +73,7 @@ func (s *math) GetRectNonCenterColProperties(imageWidth float64, imageHeight flo
 	xColOffset float64, prop props.Rect,
 ) (x float64, y float64, w float64, h float64) {
 	percent := prop.Percent / maxPercent
-	left, top, _, _ := s.pdf.GetMargins()
+	_, top, _, _ := s.pdf.GetMargins()
 
 	imageProportion := imageHeight / imageWidth
 	celProportion := colHeight / colWidth
@@ -81,7 +82,7 @@ func (s *math) GetRectNonCenterColProperties(imageWidth float64, imageHeight flo
 		newImageWidth := colHeight / imageProportion * percent
 		newImageHeight := newImageWidth * imageProportion
 
-		x = xColOffset + left + prop.Left
+		x = xColOffset + prop.Left
 		y = top
 		w = newImageWidth
 		h = newImageHeight
@@ -89,7 +90,7 @@ func (s *math) GetRectNonCenterColProperties(imageWidth float64, imageHeight flo
 		newImageWidth := colWidth * percent
 		newImageHeight := newImageWidth * imageProportion
 
-		x = xColOffset + left + prop.Left
+		x = xColOffset + prop.Left
 		y = top
 		w = newImageWidth
 		h = newImageHeight

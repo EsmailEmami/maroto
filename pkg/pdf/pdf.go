@@ -61,6 +61,7 @@ type Maroto interface {
 	SetPageMargins(left, top, right float64)
 	GetPageMargins() (left float64, top float64, right float64, bottom float64)
 	SetMaxGridSum(maxGridSum float64)
+	SetRoundedRect(r float64, corners string, stylestr string)
 
 	// Fonts
 	AddUTF8Font(familyStr string, styleStr consts.Style, fileStr string)
@@ -77,6 +78,9 @@ type Maroto interface {
 	SetSubject(subject string, isUTF8 bool)
 	SetTitle(title string, isUTF8 bool)
 	SetCreationDate(time time.Time)
+
+	// Direction
+	RTL()
 }
 
 // PdfMaroto is the principal structure which implements Maroto abstraction.
@@ -117,6 +121,9 @@ type PdfMaroto struct {
 	orientation       consts.Orientation
 	pageSize          consts.PageSize
 	defaultFontFamily string
+
+	// Direction
+	isRTL bool
 }
 
 // NewMarotoCustomSize creates a Maroto instance returning a pointer to PdfMaroto
@@ -125,7 +132,7 @@ type PdfMaroto struct {
 // If using custom width and height, pageSize is just a string value for the format and takes no effect.
 // Width and height inputs are measurements of the page in Portrait orientation.
 func NewMarotoCustomSize(orientation consts.Orientation, pageSize consts.PageSize, unitStr string, width, height float64) Maroto {
-	fpdf := gofpdf.NewCustom(&gofpdf.InitType{
+	pdf := gofpdf.NewCustom(&gofpdf.InitType{
 		OrientationStr: string(orientation),
 		UnitStr:        unitStr,
 		SizeStr:        string(pageSize),
@@ -135,10 +142,14 @@ func NewMarotoCustomSize(orientation consts.Orientation, pageSize consts.PageSiz
 		},
 		FontDirStr: "",
 	})
+
+	fpdf := fpdf.NewWrapper(pdf)
 	fpdf.SetMargins(defaultLeftMargin, defaultTopMargin, defaultRightMargin)
 
 	math := internal.NewMath(fpdf)
+
 	font := internal.NewFont(fpdf, defaultFontSize, consts.Arial, consts.Bold)
+
 	text := internal.NewText(fpdf, math, font)
 
 	signature := internal.NewSignature(fpdf, math, text)
@@ -167,6 +178,7 @@ func NewMarotoCustomSize(orientation consts.Orientation, pageSize consts.PageSiz
 		backgroundColor:   color.NewWhite(),
 		defaultFontFamily: consts.Arial,
 		maxGridSum:        consts.DefaultMaxGridSum,
+		isRTL:             false,
 	}
 
 	maroto.TableListHelper.BindGrid(maroto)
@@ -364,8 +376,11 @@ func (s *PdfMaroto) Row(height float64, closure func()) {
 		return
 	}
 
-	_, pageHeight := s.Pdf.GetPageSize()
-	_, top, _, bottom := s.Pdf.GetMargins()
+	pageWidth, pageHeight := s.Pdf.GetPageSize()
+	left, top, right, bottom := s.Pdf.GetMargins()
+
+	// set the maximum coll width as default
+	s.colWidth = pageWidth - left - right
 
 	totalOffsetY := int(s.offsetY + height + s.footerHeight)
 	maxOffsetPage := int(pageHeight - bottom - top)
@@ -396,7 +411,16 @@ func (s *PdfMaroto) Row(height float64, closure func()) {
 	}
 
 	s.rowHeight = height
-	s.xColOffset = 0
+
+	if s.isRTL {
+		// RTL starts from end!
+		s.xColOffset = pageWidth - right
+	} else {
+		s.xColOffset = left
+	}
+
+	// set X offset of the pdf
+	s.Pdf.SetX(s.xColOffset)
 
 	// This closure has the Cols to be executed.
 	closure()
@@ -414,18 +438,24 @@ func (s *PdfMaroto) Col(width uint, closure func()) {
 	}
 
 	percent := float64(width) / s.maxGridSum
+	s.colWidth = s.Pdf.AreaX() * percent
 
-	pageWidth, _ := s.Pdf.GetPageSize()
-	left, _, right, _ := s.Pdf.GetMargins()
-	widthPerCol := (pageWidth - right - left) * percent
+	if s.isRTL {
+		s.xColOffset -= s.colWidth
+		// pdf X must be set. because we are creating from right! so the col must know its start X offset
+		s.Pdf.SetX(s.xColOffset)
+	}
 
-	s.colWidth = widthPerCol
-	s.createColSpace(widthPerCol)
+	s.createColSpace(s.colWidth)
 
 	// This closure has the components to be executed.
 	closure()
 
-	s.xColOffset += s.colWidth
+	// its no needed in RTL
+	if !s.isRTL {
+		s.xColOffset += s.colWidth
+		s.Pdf.SetX(s.xColOffset)
+	}
 }
 
 // ColSpace create an empty column inside a row.
@@ -461,13 +491,13 @@ func (s *PdfMaroto) Text(text string, prop ...props.Text) {
 		textProp.Right = s.colWidth
 	}
 
-	cellWidth := s.colWidth - textProp.Left - textProp.Right
+	cellWidth := s.colWidth + textProp.Left - textProp.Right
 	if cellWidth < 0 {
 		cellWidth = 0
 	}
 
 	cell := internal.Cell{
-		X:      s.xColOffset + textProp.Left,
+		X:      s.xColOffset,
 		Y:      s.offsetY + textProp.Top,
 		Width:  cellWidth,
 		Height: 0,
@@ -653,6 +683,12 @@ func (s *PdfMaroto) GetDefaultFontFamily() string {
 	return s.defaultFontFamily
 }
 
+// RTL changes direction of the pdf
+func (s *PdfMaroto) RTL() {
+	s.Pdf.RTL()
+	s.isRTL = true
+}
+
 func (s *PdfMaroto) createColSpace(actualWidthPerCol float64) {
 	border := ""
 
@@ -661,6 +697,23 @@ func (s *PdfMaroto) createColSpace(actualWidthPerCol float64) {
 	}
 
 	s.Pdf.CellFormat(actualWidthPerCol, s.rowHeight, "", border, 0, "C", !s.backgroundColor.IsWhite(), 0, "")
+}
+
+func (s *PdfMaroto) SetRoundedRect(r float64, corners string, stylestr string) {
+	s.Pdf.SetLineWidth(0.5)
+
+	var (
+		x         = s.xColOffset
+		y         = s.offsetY + (s.rowHeight / 2)
+		collWidth = s.colWidth
+	)
+
+	// because the X offset is setted to the end
+	if s.isRTL && s.colWidth == s.Pdf.AreaX() {
+		x -= collWidth
+	}
+
+	s.Pdf.RoundedRect(x, y, collWidth, s.rowHeight, r, corners, stylestr)
 }
 
 func (s *PdfMaroto) drawLastFooter() {

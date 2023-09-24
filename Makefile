@@ -21,7 +21,7 @@ lint:
 install:
 	bash install.sh
 
-examples:
+examples: examples-rtl
 	go run internal/examples/barcodegrid/main.go
 	go run internal/examples/billing/main.go
 	go run internal/examples/billing-with-negative/main.go
@@ -35,3 +35,7 @@ examples:
 	go run internal/examples/zpl/main.go
 	go run internal/examples/utfsample/main.go
 	go run internal/examples/maxgridsum/main.go
+	go run internal/examples/billing-rtl/main.go
+
+examples-rtl:
+	go run internal/examples/billing-rtl/main.go

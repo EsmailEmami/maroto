@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/johnfercher/maroto/internal/fpdf"
+	"github.com/johnfercher/maroto/internal/gofarsi"
 	"github.com/johnfercher/maroto/pkg/consts"
 	"github.com/johnfercher/maroto/pkg/props"
 )
@@ -31,6 +32,12 @@ func NewText(pdf fpdf.Fpdf, math Math, font Font) *text {
 
 // Add a text inside a cell.
 func (s *text) Add(text string, cell Cell, textProp props.Text) {
+
+	if s.pdf.IsRTL() {
+		text = gofarsi.ToGlyph(text)
+		text = gofarsi.ReverseNumbersAndEnglishAlphabet(text)
+	}
+
 	s.font.SetFont(textProp.Family, textProp.Style, textProp.Size)
 
 	originalColor := s.font.GetColor()
@@ -110,10 +117,15 @@ func (s *text) getLines(words []string, colWidth float64) []string {
 }
 
 func (s *text) addLine(textProp props.Text, xColOffset, colWidth, yColOffset, textWidth float64, text string) {
-	left, top, _, _ := s.pdf.GetMargins()
+	_, top, _, _ := s.pdf.GetMargins()
+
+	// we have to increase the X offset because text is going to right from right side of page
+	if s.pdf.IsRTL() {
+		xColOffset += textWidth
+	}
 
 	if textProp.Align == consts.Left {
-		s.pdf.Text(xColOffset+left, yColOffset+top, text)
+		s.pdf.Text(xColOffset, yColOffset+top, text)
 		return
 	}
 
@@ -125,7 +137,7 @@ func (s *text) addLine(textProp props.Text, xColOffset, colWidth, yColOffset, te
 
 	dx := (colWidth - textWidth) / modifier
 
-	s.pdf.Text(dx+xColOffset+left, yColOffset+top, text)
+	s.pdf.Text(dx+xColOffset, yColOffset+top, text)
 }
 
 func (s *text) textToUnicode(txt string, props props.Text) string {

@@ -185,10 +185,17 @@ type Fpdf interface {
 	WriteLinkString(h float64, displayStr, targetStr string)
 	AddUTF8Font(familyStr, styleStr, fileStr string)
 	AddUTF8FontFromBytes(familyStr, styleStr string, utf8Bytes []byte)
+	RTL()
+	IsRTL() bool
+	AreaX() float64
+	RoundedRect(x, y, w, h, r float64, corners string, stylestr string)
 }
 
 type fpdf struct {
 	Gofpdf *gofpdf.Fpdf
+
+	isRTL bool
+	areaX float64
 }
 
 // NewWrapper is the constructor of the wrapper based on gofpdf interface.
@@ -718,8 +725,9 @@ func (s fpdf) SetLink(link int, y float64, page int) {
 	s.Gofpdf.SetLink(link, y, page)
 }
 
-func (s fpdf) SetMargins(left, top, right float64) {
+func (s *fpdf) SetMargins(left, top, right float64) {
 	s.Gofpdf.SetMargins(left, top, right)
+	s.calculateAreaX()
 }
 
 func (s fpdf) SetPageBoxRec(t string, pb gofpdf.PageBox) {
@@ -900,4 +908,28 @@ func (s fpdf) WriteLinkID(h float64, displayStr string, linkID int) {
 
 func (s fpdf) WriteLinkString(h float64, displayStr, targetStr string) {
 	s.Gofpdf.WriteLinkString(h, displayStr, targetStr)
+}
+
+func (s *fpdf) RTL() {
+	s.Gofpdf.RTL()
+	s.isRTL = true
+}
+
+func (s fpdf) IsRTL() bool {
+	return s.isRTL
+}
+
+func (s fpdf) AreaX() float64 {
+	return s.areaX
+}
+
+// calculateAreaX calculate the x offset of page without left and right margins
+func (s *fpdf) calculateAreaX() {
+	pageWidth, _ := s.GetPageSize()
+	left, _, right, _ := s.GetMargins()
+	s.areaX = pageWidth - left - right
+}
+
+func (s fpdf) RoundedRect(x, y, w, h, r float64, corners string, stylestr string) {
+	s.Gofpdf.RoundedRect(x, y, w, h, r, corners, stylestr)
 }
